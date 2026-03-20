@@ -399,6 +399,10 @@
   const videoTitle = document.getElementById('videoTitle');
   const videoDownloadLink = document.getElementById('videoDownloadLink');
   const audioDownloadLink = document.getElementById('audioDownloadLink');
+  const ua = navigator.userAgent || navigator.vendor || window.opera;
+  const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isMobile = isIOS || isAndroid;
 
   // Show/hide clear button
   urlInput.addEventListener('input', () => {
@@ -550,6 +554,12 @@
 
   async function forceDownload(url, filename) {
     try {
+      // iOS Safari does not support programmatic blob downloads.
+      if (isIOS) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+
       const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
       if (!res.ok) throw new Error(`Download failed (${res.status}).`);
 
@@ -580,13 +590,15 @@
       const a = document.createElement('a');
       a.href = blobUrl;
       a.download = filename || 'download';
+      if (isMobile) a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(blobUrl);
+      const revokeDelay = isMobile ? 60000 : 4000;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelay);
     } catch (err) {
       // Fallback: open in new tab so user can save manually
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener');
       showError('Direct download blocked by the server. Opened in a new tab - use "Save video as..." if needed.');
     }
   }
@@ -650,12 +662,24 @@
 
       // Download links
       videoDownloadLink.href = result.videoUrl;
-      videoDownloadLink.setAttribute('download', 'tiktok-video.mp4');
+      if (!isIOS) {
+        videoDownloadLink.setAttribute('download', 'tiktok-video.mp4');
+      } else {
+        videoDownloadLink.removeAttribute('download');
+        videoDownloadLink.target = '_blank';
+        videoDownloadLink.rel = 'noopener';
+      }
       videoDownloadLink.style.display = 'inline-flex';
 
       if (result.audioUrl) {
         audioDownloadLink.href = result.audioUrl;
-        audioDownloadLink.setAttribute('download', 'tiktok-audio.mp3');
+        if (!isIOS) {
+          audioDownloadLink.setAttribute('download', 'tiktok-audio.mp3');
+        } else {
+          audioDownloadLink.removeAttribute('download');
+          audioDownloadLink.target = '_blank';
+          audioDownloadLink.rel = 'noopener';
+        }
         audioDownloadLink.style.display = 'inline-flex';
       }
 
