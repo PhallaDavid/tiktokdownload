@@ -368,7 +368,8 @@
       <div class="result-meta">
         <p id="videoTitle" style="color:#c0c0d8;font-size:0.82rem;margin-bottom:1rem;line-height:1.5;display:none"></p>
         <div id="iosHelp" class="ios-help hidden" style="margin-bottom:0.9rem;">
-          On iPhone/iPad: tap <strong>Open Video</strong>, then tap the Share button and choose <strong>Save Video</strong> to add it to Photos.
+          On iPhone/iPad: tap <strong>Play & Save</strong>. In the full-screen player, tap Share and choose <strong>Save Video</strong>.
+          If Save Video is missing, the host is not serving a true MP4 to iOS.
         </div>
         <div class="flex flex-wrap gap-2">
           <a id="videoDownloadLink" href="#" download class="save-btn" style="display:none">
@@ -571,12 +572,6 @@
 
   async function forceDownload(url, filename) {
     try {
-      // iOS Safari does not support programmatic blob downloads.
-      if (isIOS) {
-        window.location.href = url;
-        return;
-      }
-
       const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
       if (!res.ok) throw new Error(`Download failed (${res.status}).`);
 
@@ -617,6 +612,26 @@
       // Fallback: open in new tab so user can save manually
       window.open(url, '_blank', 'noopener');
       showError('Direct download blocked by the server. Opened in a new tab - use "Save video as..." if needed.');
+    }
+  }
+
+  function openIosPlayer(url) {
+    try {
+      videoPreview.src = url;
+      videoPreview.style.display = 'block';
+      thumbWrap.style.display = 'none';
+      videoPreview.load();
+
+      const playPromise = videoPreview.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {});
+      }
+
+      if (typeof videoPreview.webkitEnterFullscreen === 'function') {
+        videoPreview.webkitEnterFullscreen();
+      }
+    } catch (err) {
+      window.location.href = url;
     }
   }
 
@@ -684,9 +699,9 @@
         videoDownloadLabel.textContent = 'Save Video';
       } else {
         videoDownloadLink.removeAttribute('download');
-        videoDownloadLink.target = '_blank';
-        videoDownloadLink.rel = 'noopener';
-        videoDownloadLabel.textContent = 'Open Video';
+        videoDownloadLink.removeAttribute('target');
+        videoDownloadLink.removeAttribute('rel');
+        videoDownloadLabel.textContent = 'Play & Save';
       }
       videoDownloadLink.style.display = 'inline-flex';
 
@@ -697,8 +712,8 @@
           audioDownloadLabel.textContent = 'Audio Only';
         } else {
           audioDownloadLink.removeAttribute('download');
-          audioDownloadLink.target = '_blank';
-          audioDownloadLink.rel = 'noopener';
+          audioDownloadLink.removeAttribute('target');
+          audioDownloadLink.removeAttribute('rel');
           audioDownloadLabel.textContent = 'Open Audio';
         }
         audioDownloadLink.style.display = 'inline-flex';
@@ -723,6 +738,11 @@
   videoDownloadLink.addEventListener('click', (e) => {
     const url = videoDownloadLink.href;
     if (!url || url === '#') return;
+    if (isIOS) {
+      e.preventDefault();
+      openIosPlayer(url);
+      return;
+    }
     e.preventDefault();
     const name = makeFileName(videoTitle.textContent, 'tiktok-video.mp4', 'mp4');
     forceDownload(url, name);
@@ -731,6 +751,7 @@
   audioDownloadLink.addEventListener('click', (e) => {
     const url = audioDownloadLink.href;
     if (!url || url === '#') return;
+    if (isIOS) return;
     e.preventDefault();
     const name = makeFileName(videoTitle.textContent, 'tiktok-audio.mp3', 'mp3');
     forceDownload(url, name);
